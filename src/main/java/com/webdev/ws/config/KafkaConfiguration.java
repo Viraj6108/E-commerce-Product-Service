@@ -116,4 +116,7 @@ public class KafkaConfiguration {
 	NewTopic productCreatedTopicEvent() {
 		return TopicBuilder.name(PRODUCT_TOPIC).replicas(TOPIC_REPLICAS).partitions(TOPIC_PARTITIONS).build();
 	}
+	NewTopic paymentTopic() {
+		return TopicBuilder.name("payment-event").replicas(TOPIC_REPLICAS).partitions(TOPIC_PARTITIONS).build();
+	}
 }

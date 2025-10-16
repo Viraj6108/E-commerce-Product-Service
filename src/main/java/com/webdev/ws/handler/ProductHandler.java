@@ -11,9 +11,11 @@ import org.springframework.kafka.support.SendResult;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
+import com.webdev.ws.commands.OrderStatusSuccessCommand;
 import com.webdev.ws.commands.PaymentProceedCommand;
 import com.webdev.ws.commands.ProductReserveCommand;
 import com.webdev.ws.errors.ProductServiceError;
+import com.webdev.ws.events.ProductReservationFailedEvent;
 import com.webdev.ws.model.ProductsEntity;
 import com.webdev.ws.repository.ProductsRepository;
 
@@ -28,13 +30,16 @@ public class ProductHandler {
 	private KafkaTemplate<String,Object>kafkaTemplate;
 	
 	private String TOPIC_NAME;
+	private String PAYMENT_TOPIC;
 	ProductHandler(ProductsRepository repository,
 			KafkaTemplate<String,Object>kafkaTemplate,
-			@Value("${product.created.topic.name}") String TOPIC_NAME)
+			@Value("${product.created.topic.name}") String TOPIC_NAME,
+			@Value("${payment.process.topic}")String PAYMENT_TOPIC)
 	{
 		this.repository = repository;
 		this.kafkaTemplate = kafkaTemplate;
 		this.TOPIC_NAME = TOPIC_NAME;
+		this.PAYMENT_TOPIC = PAYMENT_TOPIC;
 	}
 	
 	
@@ -54,17 +59,23 @@ public class ProductHandler {
 
 			int quantity = entity.getQuantity() - reserve.getQuantity();
 			entity.setQuantity(quantity);
+			repository.save(entity);
 			PaymentProceedCommand command = new PaymentProceedCommand(entity.getProductId(),reserve.getOrderId(),
 					reserve.getQuantity(),entity.getPrice());
 
-			ProducerRecord<String, Object> records = new ProducerRecord(TOPIC_NAME, entity.getProductId().toString(), command);
+			ProducerRecord<String, Object> records = new ProducerRecord(PAYMENT_TOPIC, entity.getProductId().toString(), command);
 			SendResult<String, Object> result = kafkaTemplate.send(records).get();
-			repository.save(entity);
+			
+			OrderStatusSuccessCommand orderCommand = new OrderStatusSuccessCommand(reserve.getOrderId());
+			kafkaTemplate.send("order-command",null,orderCommand);
+			
 			logger.info("Topic partition ", result.getRecordMetadata().partition());
 			logger.info("Topic name" + result.getRecordMetadata().topic());
 		} catch (Exception e) {
 			logger.error("error while retriving data from DB" + e.getLocalizedMessage());
-			throw new Exception(e.getLocalizedMessage());
+			ProductReservationFailedEvent productReservationFailedEvent = new ProductReservationFailedEvent(reserve.getProductId()
+					,reserve.getOrderId());
+					kafkaTemplate.send(TOPIC_NAME,null,productReservationFailedEvent);
 		}
 	}
 	
