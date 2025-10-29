@@ -11,7 +11,6 @@ import org.springframework.kafka.support.SendResult;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
-import com.webdev.ws.commands.OrderStatusSuccessCommand;
 import com.webdev.ws.commands.PaymentProceedCommand;
 import com.webdev.ws.commands.ProductReserveCommand;
 import com.webdev.ws.errors.ProductServiceError;
@@ -63,11 +62,11 @@ public class ProductHandler {
 			PaymentProceedCommand command = new PaymentProceedCommand(entity.getProductId(),reserve.getOrderId(),
 					reserve.getQuantity(),entity.getPrice());
 
-			ProducerRecord<String, Object> records = new ProducerRecord(PAYMENT_TOPIC, entity.getProductId().toString(), command);
+			//Send To Product-event topic 
+			ProducerRecord<String, Object> records = new ProducerRecord(TOPIC_NAME, entity.getProductId().toString(), command);
 			SendResult<String, Object> result = kafkaTemplate.send(records).get();
 			
-			OrderStatusSuccessCommand orderCommand = new OrderStatusSuccessCommand(reserve.getOrderId());
-			kafkaTemplate.send("order-command",null,orderCommand);
+			
 			
 			logger.info("Topic partition ", result.getRecordMetadata().partition());
 			logger.info("Topic name" + result.getRecordMetadata().topic());
