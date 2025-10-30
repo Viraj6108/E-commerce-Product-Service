@@ -12,8 +12,11 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 import com.webdev.ws.commands.PaymentProceedCommand;
+import com.webdev.ws.commands.ProductQuantityReverseCommand;
 import com.webdev.ws.commands.ProductReserveCommand;
+import com.webdev.ws.errors.NotRetryableException;
 import com.webdev.ws.errors.ProductServiceError;
+import com.webdev.ws.events.ProductQuantityReversedEvent;
 import com.webdev.ws.events.ProductReservationFailedEvent;
 import com.webdev.ws.model.ProductsEntity;
 import com.webdev.ws.repository.ProductsRepository;
@@ -46,7 +49,7 @@ public class ProductHandler {
 	public void handler(@Payload ProductReserveCommand reserve) throws Exception {
 		try {
 			
-			ProductsEntity entity = repository.findByProductId(reserve.getProductId());
+			ProductsEntity entity = repository.findByProductId(reserve.getProductId()).orElseThrow(()-> new NotRetryableException("Product not found with id "+reserve.getProductId()));
 			if (entity == null) {
 				throw new ProductServiceError("Product not found with id" + reserve.getProductId());
 			}
@@ -78,6 +81,21 @@ public class ProductHandler {
 		}
 	}
 	
+	
+	//Add the quantity reserved for order 
+	@KafkaHandler
+	public void reverseProductQuantity(@Payload ProductQuantityReverseCommand command) {
+		ProductsEntity entity = repository.findByProductId(command.getProductId())
+				.orElseThrow(() -> new NotRetryableException("Product not found with id" + command.getProductId()));
+		entity.setQuantity(entity.getQuantity() + command.getQuantity());
+		repository.save(entity);
+		ProductQuantityReversedEvent event = new ProductQuantityReversedEvent(entity.getProductId(),
+				command.getOrderId(), entity.getQuantity());
+		kafkaTemplate.send(TOPIC_NAME, event);
+		logger.info("event sent to topic Product-event");
+		logger.info("sent : product Id" + entity.getProductId() + " " + "Order Id" + command.getProductId() + " "
+				+ "Quantity reversed" + command.getQuantity());
+	}
 
 @KafkaHandler(isDefault = true)
     public void handleUnknown(Object unknown) {

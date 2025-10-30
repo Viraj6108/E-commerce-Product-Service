@@ -1,5 +1,6 @@
 package com.webdev.ws.repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,5 +12,5 @@ import com.webdev.ws.model.ProductsEntity;
 public interface ProductsRepository extends JpaRepository<ProductsEntity,Long>{
 
 	ProductsEntity findByProductName(String productName);
-	ProductsEntity findByProductId(UUID productId);
+	Optional<ProductsEntity> findByProductId(UUID productId);
 }
